@@ -78,7 +78,7 @@ class _HomePageState extends State<HomePage> {
         channelName: 'خدمة تجزئة الفيديو',
         channelDescription: 'تضمن استمرار التقسيم في الخلفية على أندرويد 15',
         channelImportance: NotificationChannelImportance.LOW,
-        priority: NotificationNotificationPriority.LOW,
+        priority: NotificationPriority.LOW,
       ),
       iosNotificationOptions: const IOSNotificationOptions(),
       foregroundTaskOptions: ForegroundTaskOptions(
