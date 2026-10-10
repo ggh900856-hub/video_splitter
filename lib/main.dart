@@ -8,10 +8,10 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:video_player/video_player.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  // تهيئة خدمة الخلفية قبل تشغيل التطبيق
   FlutterForegroundTask.initCommunicationPort();
   runApp(const SplitterApp());
 }
@@ -70,7 +70,6 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  // تهيئة إعدادات الإشعار والخدمة في الخلفية متوافقة مع أندرويد 15
   void _initForegroundTask() {
     FlutterForegroundTask.init(
       androidNotificationOptions: AndroidNotificationOptions(
@@ -78,7 +77,7 @@ class _HomePageState extends State<HomePage> {
         channelName: 'خدمة تجزئة الفيديو',
         channelDescription: 'تضمن استمرار التقسيم في الخلفية على أندرويد 15',
         channelImportance: NotificationChannelImportance.LOW,
-        priority: NotificationPriority.LOW,
+        priority: NotificationNotificationPriority.LOW,
       ),
       iosNotificationOptions: const IOSNotificationOptions(),
       foregroundTaskOptions: ForegroundTaskOptions(
@@ -89,7 +88,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // جلب المجلدات المحفوظة من الذاكرة
   Future<void> _loadSavedFolders() async {
     final dir = await getApplicationDocumentsDirectory();
     final splitterDir = Directory('${dir.path}/SplitVideos');
@@ -101,7 +99,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // دلالة تقسيم الفيديو المتوافقة مع الخلفية
   Future<void> _startSplitting(int seconds) async {
     final XFile? video = await _picker.pickVideo(source: ImageSource.gallery);
     if (video == null) return;
@@ -111,7 +108,6 @@ class _HomePageState extends State<HomePage> {
       _status = 'جاري بدء التجزئة في الخلفية بأمان…';
     });
 
-    // إطلاق الإشعار العلوي والخدمة الأمامية
     await FlutterForegroundTask.startService(
       notificationTitle: 'جاري تجزئة الفيديو الآن',
       notificationText: 'يرجى الانتظار، المعالجة مستمرة في الخلفية...',
@@ -119,21 +115,16 @@ class _HomePageState extends State<HomePage> {
 
     try {
       final appDir = await getApplicationDocumentsDirectory();
-      // استخراج اسم الفيديو الأصلي بدون الامتداد لتسمية المجلد به
       final originalName = video.name.split('.').first;
       final folderName = '${originalName}_${DateTime.now().millisecondsSinceEpoch}';
       final outputFolder = Directory('${appDir.path}/SplitVideos/$folderName');
       await outputFolder.create(recursive: true);
 
       final outputPathPattern = "${outputFolder.path}/part_%03d.mp4";
-      
-      // أمر التقسيم فائق السرعة عبر نسخ الترميز المباشر لقضم المقطع بثانية واحدة
       final ffmpegCommand = "-i ${video.path} -c copy -map 0 -f segment -segment_time $seconds -reset_timestamps 1 $outputPathPattern";
 
       await FFmpegKit.executeAsync(ffmpegCommand, (session) async {
         final returnCode = await session.getReturnCode();
-        
-        // إغلاق خدمة الخلفية فور انتهاء المعالجة
         await FlutterForegroundTask.stopService();
 
         if (!mounted) return;
@@ -163,55 +154,13 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // فتح صندوق المجلد لمشاهدة ومشاركة المقاطع الناتجة
   void _showFolderContents(Directory folder) {
-    final files = folder.listSync().whereType<File>().toList();
-    // ترتيب الملفات تصاعدياً حسب الاسم ليظهر part_000 ثم part_001
-    files.sort((a, b) => a.path.compareTo(b.path));
-    
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF0A1128),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          maxChildSize: 0.9,
-          expand: false,
-          builder: (context, scrollController) {
-            return Scaffold(
-              backgroundColor: Colors.transparent,
-              appBar: AppBar(
-                title: Text('المقاطع المقسمة (${files.length})'),
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                automaticallyImplyLeading: false,
-              ),
-              body: ListView.builder(
-                controller: scrollController,
-                itemCount: files.length,
-                itemBuilder: (context, index) {
-                  final file = files[index];
-                  final name = file.path.split('/').last;
-                  return ListTile(
-                    leading: const Icon(Icons.video_file, color: Color(0xFF00B4D8)),
-                    title: Text(name, style: const TextStyle(fontSize: 14)),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.share, color: Colors.white70),
-                      onPressed: () => Share.shareXFiles([XFile(file.path)]),
-                    ),
-                  );
-                },
-              ),
-            );
-          },
-        );
-      },
-    );
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => FolderDetailsPage(folder: folder)),
+    ).then((_) => _loadSavedFolders());
   }
 
-  // واجهة إدخال رقم ثواني مخصص من قبل المستخدم
   void _showCustomTimeDialog() {
     showDialog(
       context: context,
@@ -267,7 +216,6 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // صف الأزرار الجاهزة
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
@@ -277,7 +225,6 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
             const SizedBox(height: 12),
-            // زر الوقت المخصص بتصميم عريض ومميز
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00B4D8),
@@ -340,6 +287,210 @@ class _HomePageState extends State<HomePage> {
       ),
       onPressed: _isProcessing ? null : onPressed,
       child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 13)),
+    );
+  }
+}
+
+class FolderDetailsPage extends StatefulWidget {
+  final Directory folder;
+  const FolderDetailsPage({super.key, required this.folder});
+
+  @override
+  State<FolderDetailsPage> createState() => _FolderDetailsPageState();
+}
+
+class _FolderDetailsPageState extends State<FolderDetailsPage> {
+  List<FileSystemEntity> _files = [];
+  final Map<String, bool> _selectedFiles = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFiles();
+  }
+
+  void _loadFiles() {
+    final entities = widget.folder.listSync().whereType<File>().toList();
+    entities.sort((a, b) => a.path.compareTo(b.path));
+    setState(() {
+      _files = entities;
+      for (var file in _files) {
+        if (!_selectedFiles.containsKey(file.path)) {
+          _selectedFiles[file.path] = true;
+        }
+      }
+    });
+  }
+
+  Future<void> _saveSelectedToGallery() async {
+    final selectedPaths = _files.where((f) => _selectedFiles[f.path] == true).map((f) => f.path).toList();
+    if (selectedPaths.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يرجى تحديد مقطع واحد على الأقل')));
+      return;
+    }
+
+    try {
+      final Directory galleryDir = Directory('/storage/emulated/0/Download');
+      if (await galleryDir.exists()) {
+        for (var path in selectedPaths) {
+          final file = File(path);
+          final name = path.split('/').last;
+          await file.copy('${galleryDir.path}/$name');
+        }
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حفظ المقاطع المحددة في مجلد Download بالمعرض!')));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر الوصول لمجلد التنزيلات بالهاتف')));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('حدث خطأ أثناء الحفظ: $e')));
+    }
+  }
+
+  void _shareSelectedFiles() {
+    final selectedXFiles = _files.where((f) => _selectedFiles[f.path] == true).map((f) => XFile(f.path)).toList();
+    if (selectedXFiles.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يرجى تحديد مقطع واحد على الأقل للمشاركة')));
+      return;
+    }
+    Share.shareXFiles(selectedXFiles, text: 'المقاطع المقسمة الخاصة بي');
+  }
+
+  void _previewVideo(File file) {
+    showDialog(
+      context: context,
+      builder: (context) => VideoPlayerDialog(file: file),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A1128),
+      appBar: AppBar(title: const Text('المقاطع الناتجة'), backgroundColor: const Color(0xFF0A1128)),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              itemCount: _files.length,
+              itemBuilder: (context, index) {
+                final file = _files[index] as File;
+                final name = file.path.split('/').last;
+                return CheckboxListTile(
+                  title: Text(name, style: const TextStyle(fontSize: 14)),
+                  secondary: IconButton(
+                    icon: const Icon(Icons.play_circle_fill, color: Color(0xFF00B4D8), size: 30),
+                    onPressed: () => _previewVideo(file),
+                  ),
+                  value: _selectedFiles[file.path],
+                  activeColor: const Color(0xFF00B4D8),
+                  onChanged: (bool? val) {
+                    setState(() {
+                      _selectedFiles[file.path] = val ?? false;
+                    });
+                  },
+                );
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, padding: const EdgeInsets.symmetric(vertical: 14)),
+                    onPressed: _saveSelectedToGallery,
+                    icon: const Icon(Icons.save_alt, color: Colors.black),
+                    label: const Text('حفظ بالمعرض', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00B4D8), padding: const EdgeInsets.symmetric(vertical: 14)),
+                    onPressed: _shareSelectedFiles,
+                    icon: const Icon(Icons.share, color: Colors.white),
+                    label: const Text('مشاركة المحدَد', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class VideoPlayerDialog extends StatefulWidget {
+  final File file;
+  const VideoPlayerDialog({super.key, required this.file});
+
+  @override
+  State<VideoPlayerDialog> createState() => _VideoPlayerDialogState();
+}
+
+class _VideoPlayerDialogState extends State<VideoPlayerDialog> {
+  late VideoPlayerController _controller;
+  bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.file(widget.file)..initialize().then((_) {
+      setState(() {
+        _initialized = true;
+      });
+      _controller.play();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFF0A1128),
+      contentPadding: EdgeInsets.zero,
+      content: _initialized
+          ? AspectRatio(
+              aspectRatio: _controller.value.aspectRatio,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  VideoPlayer(_controller),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _controller.value.isPlaying ? _controller.pause() : _controller.play();
+                      });
+                    },
+                    child: Container(
+                      color: Colors.transparent,
+                      child: Icon(
+                        _controller.value.isPlaying ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                        size: 60,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : const SizedBox(
+              height: 150,
+              child: Center(child: CircularProgressIndicator(color: Color(0xFF00B4D8))),
+            ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('إغلاق', style: TextStyle(color: Colors.white70)),
+        ),
+      ],
     );
   }
 }
